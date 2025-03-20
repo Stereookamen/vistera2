@@ -1,28 +1,139 @@
+scripts:
+  - &prepare_flutter_deps
+    name: Prepare Flutter Dependencies
+    script: flutter packages pub get
+  - &prepare_flutter_environment
+    name: Prepare Flutter Environment
+    script: ./set_env.sh $CM_BRANCH
+  # Android
+  - &prepare_android_local_properties
+    name: Prepare Android local properties
+    script: echo "flutter.sdk=$HOME/programs/flutter" > "$CM_BUILD_DIR/android/local.properties"
+  - &build_android_release
+    name: Build Android release
+    script: flutter build apk --release
+  - &install_appcenter_cli
+    name: Install AppCenter CLI
+    script: npm install -g appcenter-cli
+  - &publish_android_appcenter
+    name: Publishing AAB to App Center
+    script: |
+      appcenter distribute release \
+          --group "$APP_CENTER_GROUP" \
+          --file $AAB_PATH \
+          --release-notes 'App submission via Codemagic' \
+          --app $APP_CENTER_APP \
+          --token $APP_CENTER_TOKEN \
+          --quiet
+  
+
 workflows:
   android-workflow:
-    name: Flutter CI
-
-on:
-  push:
-    branches:
-      - master
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-java@v1
-        with:
-          java-version: '12.x'
-      - uses: subosito/flutter-action@v1
-        with:
-          channel: 'beta'
-      - run: flutter pub get
-      - run: flutter format --set-exit-if-changed .
-      - run: flutter analyze .
-      - run: flutter build apk
-      - uses: actions/upload-artifact@v1
-        with:
-          name: release-apk
-          path: build/app/outputs/apk/release/app-release.apk
+    name: Android Workflow
+    max_build_duration: 60
+    environment:
+      android_signing:
+        - $ANDROID_CM_KEYSTORE
+      groups:
+        - app_center_credentials
+      vars:
+        APP_CENTER_GROUP: Internal Testers
+        APP_CENTER_APP: [your app center app url]
+        AAB_PATH: build/app/outputs/flutter-apk/app-release.apk
+        ANDROID_CM_KEYSTORE: [your keystore unique reference name]
+        SLACK_CHANNEL: "#[slack channel]"
+      flutter: default
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: qa
+          include: true
+          source: true
+        - pattern: uat
+          include: true
+          source: true
+      tag_patterns:
+        - pattern: '*'
+          include: true
+    scripts:
+      # Environment setup
+      - *prepare_flutter_deps
+      - *prepare_flutter_environment
+      # Android
+      - *prepare_android_key_store
+      - *prepare_android_local_properties
+      - *build_android_release
+      
+      - *install_appcenter_cli
+      - *publish_android_appcenter
+    artifacts:
+        # Android
+        - build/**/outputs/apk/**/*.apk
+        - build/**/outputs/bundle/**/*.aab
+        - build/**/outputs/**/mapping.txt
+    publishing:
+      email:
+        recipients:
+          - [email for notifications]
+      slack:
+        channel: $SLACK_CHANNEL
+        notify_on_build_start: true
+  
+  ios-workflow:
+    name: iOS Workflow
+    max_build_duration: 60
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: $APP_IDENTIFIER
+      vars:
+        APP_STORE_CONNECT_KEY_IDENTIFIER: [your key identifier]
+        APP_STORE_CONNECT_ISSUER_ID: [your issuer id]
+        APP_STORE_INTEGRATION_NAME: [your integration name]
+        APP_IDENTIFIER: [your app identifier]
+        SLACK_CHANNEL: "#[slack channel]"
+      flutter: default
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: qa
+          include: true
+          source: true
+        - pattern: uat
+          include: true
+          source: true
+      tag_patterns:
+        - pattern: '*'
+          include: true
+    scripts:
+      # Environment setup
+      - *prepare_flutter_deps
+      - *prepare_flutter_environment
+      # iOS
+      - *install_ios_deps
+      - *initialise_ios_keychain
+      - *add_ceritificates_to_ios_keychain
+      - *prepare_xcode_deps
+      - *build_ios_release
+    artifacts:
+        # iOS
+        - build/ios/ipa/*.ipa
+        - /tmp/xcodebuild_logs/*.log
+        - '*.snap'
+    integrations:
+      app_store_connect: $APP_STORE_INTEGRATION_NAME
+    publishing:
+      email:
+        recipients:
+          - [email for notifications]
+      slack:
+        channel: $SLACK_CHANNEL
+        notify_on_build_start: true
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
