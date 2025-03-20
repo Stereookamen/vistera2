@@ -18,7 +18,9 @@ allprojects {
         mavenCentral()
     }
 }
-
+android {
+    namespace 'com.motopress.mphb_app'
+    }
 rootProject.buildDir = '../build'
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
@@ -29,6 +31,4 @@ task clean(type: Delete) {
     delete rootProject.buildDir
 }
 
-android {
-    namespace 'com.motopress.mphb_app'
-    }
+
