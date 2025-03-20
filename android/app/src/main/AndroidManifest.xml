@@ -2,7 +2,7 @@
     package="com.motopress.mphb_app">
    <uses-permission android:name="android.permission.INTERNET" />
    <application
-        android:label="Hotel Booking"
+        android:label="VIS-TERRA"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
