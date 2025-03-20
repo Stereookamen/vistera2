@@ -28,6 +28,3 @@ task clean(type: Delete) {
     delete rootProject.buildDir
 }
 
-android {
-    namespace 'com.motopress.mphb_app'
-    }
